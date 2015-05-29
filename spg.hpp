@@ -45,7 +45,7 @@ struct Node
         }
 };
 
-template <typename Alloc = std::allocator<int>>
+template <typename Alloc = std::allocator<int>, typename PointerAlloc = std::allocator<Node*>>
 class SPG
 {
     using NodeAllocator = typename Alloc::template rebind<Node>::other;
@@ -105,6 +105,26 @@ class SPG
             m_Impl.NodeAllocator::deallocate(p_Node, 1);
         }
 
+        PointerAlloc& GetPointerAllocator()
+        {
+            return *static_cast<PointerAlloc*>(&m_Impl);
+        }
+
+        PointerAlloc const& GetPointerAllocator() const
+        {
+            return *static_cast<PointerAlloc const*>(&m_Impl);
+        }
+
+        link_type* GetPointer(std::size_t p_Size)
+        {
+            return m_Impl.PointerAlloc::allocate(p_Size);
+        }
+
+        void PutPointer(link_type* p_Pointer, std::size_t p_Size)
+        {
+            m_Impl.PointerAlloc::deallocate(p_Pointer, p_Size);
+        }
+
         link_type CreateNode(int const& p_Val)
         {
             bigcount++;
@@ -130,12 +150,14 @@ class SPG
         ////////////////////////
         ////////////////////////
 
-        struct SPG_Impl : public NodeAllocator
+        struct SPG_Impl : public NodeAllocator, public PointerAlloc
         {
             link_type m_Root; ///< Root of the tree.
 
-            SPG_Impl(NodeAllocator const& p_Allocator = NodeAllocator())
+            SPG_Impl(NodeAllocator const& p_Allocator = NodeAllocator(),
+                    PointerAlloc const& p_PtrAllocator = PointerAlloc())
                 : NodeAllocator(p_Allocator),
+                PointerAlloc(p_PtrAllocator),
                 m_Root(nullptr)
             {
             }
@@ -192,10 +214,12 @@ class SPG
                 return true;
             }
 
-            auto&& l_Result = InsertKey(m_Impl.m_Root, p_Key, 0);
+            std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 2;
+            link_type* l_Parts = GetPointer(l_Size);
+
+            auto&& l_Result = InsertKey(m_Impl.m_Root, p_Key, l_Parts);
             auto&& l_Height = std::get<0>(l_Result);
             auto&& l_NewNode = std::get<1>(l_Result);
-            auto&& l_Parents = std::get<2>(l_Result);
 
             ++m_Size;
 
@@ -205,7 +229,7 @@ class SPG
             else if (l_Height > HeightAlpha(m_Size))
             {
                 /// We find the node that is making the unbalance and rebuild the sub-tree.
-                auto&& l_Result = FindSpaceGoatNode(l_NewNode, std::move(l_Parents));
+                auto&& l_Result = FindSpaceGoatNode(l_NewNode, l_Parts, l_Height - 1);
                 auto l_SpaceGoatNode = std::get<0>(l_Result);
                 auto l_ParentSG = std::get<1>(l_Result);
                 l_SpaceGoatNode = RebuildTree(l_SpaceGoatNode->Size(), l_SpaceGoatNode);
@@ -222,6 +246,8 @@ class SPG
                     m_Impl.m_Root = l_SpaceGoatNode;
             }
 
+            PutPointer(l_Parts, l_Size);
+
             return true;
         }
 
@@ -237,7 +263,7 @@ class SPG
         /// the authorized alpha height.
         /// @p_Node : The node to look from.
         /// Returns the space goat node if found, the root otherwise.
-        std::pair<link_type, link_type> FindSpaceGoatNode(link_type p_Node, std::stack<Node*>&& p_Parents) const
+        std::pair<link_type, link_type> FindSpaceGoatNode(link_type p_Node, link_type* p_Parents, int p_Height) const
         {
             assert(p_Node != nullptr);
 
@@ -248,10 +274,9 @@ class SPG
             std::size_t l_TotalSize = 0;
             std::size_t l_Height = 0;
 
-            while (!p_Parents.empty())
+            while (p_Height >= 0)
             {
-                l_Parent = p_Parents.top();
-                p_Parents.pop();
+                l_Parent = p_Parents[p_Height--];
 
                 l_Height++;
 
@@ -259,8 +284,7 @@ class SPG
                 l_Sibling = p_Node->Key <= l_Parent->Key ? l_Parent->Right : l_Parent->Left;
                 l_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
                 if (l_Height > HeightAlpha(l_TotalSize))
-                    return std::make_pair(l_Parent, p_Parents.empty() ? nullptr : p_Parents.top());
-
+                    return std::make_pair(l_Parent, p_Height == 0 ? nullptr : p_Parents[p_Height]);
 
                 p_Node = l_Parent;
                 l_Size = l_TotalSize;
@@ -309,26 +333,26 @@ class SPG
             return FlattenTree(l_Tmp, p_Root);
         }
 
-        std::tuple<int, link_type, std::stack<link_type>> InsertKey(link_type p_Root, int p_Key, std::size_t p_Height)
+        std::tuple<int, link_type> InsertKey(link_type p_Root, int p_Key, link_type* p_Parents)
         {
-            std::stack<link_type> l_Parents;
+            std::size_t l_Height = 0;
             while (p_Root)
             {
                 /// We save the parents.
-                l_Parents.push(p_Root);
+                p_Parents[l_Height] = p_Root;
 
                 /// If the given key already exists, we return a negative height.
                 if (p_Root->Key == p_Key)
-                    return std::make_tuple(-1, nullptr, l_Parents);
+                    return std::make_tuple(-1, nullptr);
                 /// We look for a left/right place to put our new node.
                 else if (p_Key <= p_Root->Key && p_Root->Left)
                     p_Root = p_Root->Left;
-                else if (p_Key > p_Root->Key && p_Root->Right)
+                else if (p_Root->Right && p_Key > p_Root->Key)
                     p_Root = p_Root->Right;
                 else
                     break;
 
-                p_Height++;
+                l_Height++;
             }
 
             /// Build our new node.
@@ -342,7 +366,7 @@ class SPG
             else
                 p_Root->Right = l_NewNode;
 
-            return std::make_tuple(p_Height + 1, l_NewNode, std::move(l_Parents));
+            return std::make_tuple(l_Height + 1, l_NewNode);
         }
 
         void DestroyRec(Node* p_N)
