@@ -101,7 +101,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     }
 
     /// We allocate the array of the parents. Size is the maximum height of the tree.
-    std::size_t l_Size = 900;//static_cast<std::size_t>(HeightAlpha(m_Size)) + 2;
+    std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 2;
     link_type* l_Parts = AllocatePointers(l_Size);
 
     auto&& l_Result = InsertKey(m_Impl.m_Root, p_Key, l_Parts);
@@ -113,13 +113,14 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     if (l_Height == -1)
         return false;
     /// If the height is greater than the alpha height, we rebalance the tree.
-    else if (false && l_Height > HeightAlpha(m_Size))
+    else if (l_Height > HeightAlpha(m_Size))
     {
         /// We find the node that is making the unbalance and rebuild the sub-tree.
         auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parts, l_Height - 1);
         auto l_ScapeGoatNode = std::get<0>(l_Result);
         auto l_ParentSG = std::get<1>(l_Result);
-        l_ScapeGoatNode = RebuildTree(l_ScapeGoatNode->Size(), l_ScapeGoatNode);
+        auto l_SizeST = std::get<2>(l_Result);
+        l_ScapeGoatNode = RebuildTree2(l_SizeST, l_ScapeGoatNode);
 
         /// We link back the new subtree to the current tree.
         if (l_ParentSG)
@@ -152,7 +153,7 @@ SPG<T, Alloc, PtrAlloc>::PrettyPrint() const
 template <typename T,
           typename Alloc,
           typename PtrAlloc>
-std::pair<typename SPG<T, Alloc, PtrAlloc>::link_type, typename SPG<T, Alloc, PtrAlloc>::link_type>
+std::tuple<typename SPG<T, Alloc, PtrAlloc>::link_type, typename SPG<T, Alloc, PtrAlloc>::link_type, std::size_t>
 SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const
 {
     assert(p_Node != nullptr);
@@ -164,7 +165,7 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
     std::size_t l_TotalSize = 0;
     std::size_t l_Height = 0;
 
-    std::stack<std::pair<link_type, link_type>> l_SGNodes;
+    std::stack<std::tuple<link_type, link_type, std::size_t>> l_SGNodes;
 
     while (p_Ind >= 0)
     {
@@ -177,7 +178,7 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
         l_Sibling = p_Node->Key <= l_Parent->Key ? l_Parent->Right : l_Parent->Left;
         l_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
         if (l_Height > HeightAlpha(l_TotalSize))
-            l_SGNodes.push(std::make_pair(l_Parent, p_Ind < 0 ? nullptr : p_Parents[p_Ind]));
+            l_SGNodes.push(std::make_tuple(l_Parent, p_Ind < 0 ? nullptr : p_Parents[p_Ind], l_TotalSize));
 
         /// If we get a deep enough ancestor, we stop and return.
         if (l_SGNodes.size() == 2)
@@ -190,7 +191,7 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
     if (!l_SGNodes.empty())
         return l_SGNodes.top();
 
-    return std::make_pair(m_Impl.m_Root, nullptr);
+    return std::make_tuple(m_Impl.m_Root, nullptr, l_TotalSize);
 }
 
 template <typename T,
@@ -333,140 +334,72 @@ struct BuildingElement
     bool LacksFather;
 };
 
+/// Implementation is based on the Day/Stout/Warren algorithm for
+/// rebalancing trees.
 template <typename T,
           typename Alloc,
           typename PtrAlloc>
 typename SPG<T, Alloc, PtrAlloc>::link_type
 SPG<T, Alloc, PtrAlloc>::RebuildTree2(std::size_t p_N, link_type p_SPN)
 {
-    int l_InsertType = 0; /// 0 is left, 1 is right and 2 is center.
-    int l_SlotsInLastLevel = std::pow(2, std::floor(std::log(p_N)));
-    int l_NodesForLastLevel = p_N - l_SlotsInLastLevel + 1;
-    float l_Ratio = float(l_NodesForLastLevel) / float(l_SlotsInLastLevel);
-    std::size_t l_MaxDepth = HeightAlpha(p_N) + 2;
-    auto l_Ind = 0;
-
-    std::stack<link_type> l_RuiningStack;
-    BuildingElement<T>* l_BuildingStack = new BuildingElement<T>[l_MaxDepth];
-
-    /// Definition of the GetNextNode function.
-    auto GetNextNode = [&l_RuiningStack]() -> link_type
+    // Tree to Vine algorithm:  a "pseudo-root" is passed ---
+    // comparable with a dummy header for a linked list.
+    auto tree_to_vine = [](link_type root, std::size_t& size)
     {
-        auto l_NextNode = l_RuiningStack.top();
-        decltype(l_NextNode) l_FatherNode = nullptr;
+        link_type vineTail, remainder, tempPtr;
 
-        while (l_NextNode->Left != nullptr)
-        {
-            l_FatherNode = l_NextNode;
-            l_NextNode = l_NextNode->Left;
-        }
-
-        if (l_NextNode == l_RuiningStack.top())
-            l_RuiningStack.pop();
-        else
-            l_FatherNode = nullptr;
-
-        if (l_NextNode->Right != nullptr)
-            l_RuiningStack.push(l_NextNode->Right);
-
-        return l_NextNode;
-    };
-
-    auto AddNonLeaf = [l_BuildingStack, &l_Ind](link_type p_NextNode)
-    {
-        p_NextNode->Left = l_BuildingStack[l_Ind].Node;
-        auto l_NextNodeHeight = l_BuildingStack[l_Ind--].Height + 1;
-
-        if (l_Ind > 1 && l_BuildingStack[l_Ind - 1].Height == l_NextNodeHeight + 1)
-        {
-            l_BuildingStack[l_Ind].Node->Right = p_NextNode;
-            if (!l_BuildingStack[l_Ind].LacksFather)
-                l_Ind--;
-            else
-                l_BuildingStack[l_Ind].LacksRightSon = false;
-
-            l_BuildingStack[++l_Ind] = {p_NextNode, l_NextNodeHeight, true, false};
-        }
-        else
-            l_BuildingStack[++l_Ind] = {p_NextNode, l_NextNodeHeight, true, true};
-
-        if (l_BuildingStack[l_Ind].Height > 1)
-            return 0;
-        else
-            return 1;
-    };
-
-    auto SkipALeaf = [AddNonLeaf, l_BuildingStack, &l_Ind](link_type p_NextNode, int p_InsertType)
-    {
-        if (p_InsertType == 0)
-        {
-            p_NextNode->Left = nullptr;
-            if (l_BuildingStack[l_Ind].Height == 2)
-            {
-                l_BuildingStack[l_Ind].Node->Right = p_NextNode;
-                if (!l_BuildingStack[l_Ind].LacksFather)
-                    l_Ind--;
-                else
-                    l_BuildingStack[l_Ind].LacksRightSon = false;
-                l_BuildingStack[++l_Ind] = {p_NextNode, 1, true, false};
+        vineTail = root;
+        remainder = vineTail->Right;
+        size = 0;
+        while ( remainder != NULL )
+        {//If no leftward subtree, move rightward
+            if ( remainder->Left == NULL )
+            {  vineTail = remainder;
+                remainder = remainder->Right;
+                size++;
             }
-            else
-                l_BuildingStack[++l_Ind] = {p_NextNode, 1, true, true};
-
-            return 1;
-        }
-        else
-        {
-            /// Skip a right leaf.
-            l_BuildingStack[l_Ind].Node->Right = nullptr;
-            if (!l_BuildingStack[l_Ind].LacksFather)
-                l_Ind--;
-            else
-                l_BuildingStack[l_Ind].LacksRightSon = false;
-
-            return AddNonLeaf(p_NextNode);
+            //else eliminate the leftward subtree by rotations
+            else  // Rightward rotation
+            {  tempPtr = remainder->Left;
+                remainder->Left = tempPtr->Right;
+                tempPtr->Right = remainder;
+                remainder = tempPtr;
+                vineTail->Right = tempPtr;
+            }
         }
     };
 
-    auto AddALeaf = [l_BuildingStack, &l_Ind](link_type p_NextNode, int p_InsertType)
+    auto compression = []( link_type root, int count )
+    {  link_type scanner = root;
+
+        for ( int j = 0; j < count; j++ )
+        {//Leftward rotation
+            link_type child = scanner->Right;
+            scanner->Right = child->Right;
+            scanner = scanner->Right;
+            child->Right = scanner->Left;
+            scanner->Left = child;
+        }  // end for
+    };  // end compression
+
+    // Loop structure taken directly from Day's code
+    auto vine_to_tree = [&compression]( link_type root, int size )
     {
-        p_NextNode->Right = nullptr;
-        p_NextNode->Left = nullptr;
-
-        if (p_InsertType == 0)
-            l_BuildingStack[++l_Ind] = {p_NextNode, 0, false, true};
-        else
-        {
-            l_BuildingStack[l_Ind].Node->Right = p_NextNode;
-            if (l_BuildingStack[l_Ind].LacksFather)
-                l_BuildingStack[l_Ind].LacksRightSon = false;
-            else
-                l_Ind--;
-        }
-
-        return 2;
+        auto FullSize = [] ( int size )    // Full portion of a complete tree
+        {  int Rtn = 1;
+            while ( Rtn <= size )     // Drive one step PAST FULL
+                Rtn = Rtn + Rtn + 1;   // next pow(2,k)-1
+            return Rtn/2;
+        };
+        int full_count = FullSize (size);
+        compression(root, size - full_count);
+        for ( size = full_count ; size > 1 ; size /= 2 )
+            compression ( root, size / 2 );
     };
 
-    /// Definition of AddNewNode function.
-    auto AddNewNode = [&SkipALeaf, &AddALeaf, &AddNonLeaf, &l_NodesForLastLevel, &l_SlotsInLastLevel, &l_Ratio](link_type p_NextNode, int p_InsertType)
-    {
-        if (p_InsertType != 2)
-        {
-            l_SlotsInLastLevel--;
-            if (l_SlotsInLastLevel > 0 && float(l_NodesForLastLevel) / float(l_SlotsInLastLevel) < l_Ratio)
-                return SkipALeaf(p_NextNode, p_InsertType);
+    node_type l_PseudoRoot{value_type(), nullptr, p_SPN};
 
-            l_NodesForLastLevel--;
-            return AddALeaf(p_NextNode, p_InsertType);
-        }
-        else
-            return AddNonLeaf(p_NextNode);
-    };
-
-    l_RuiningStack.push(p_SPN);
-
-    for (int i = 0; i < p_N; i++)
-        l_InsertType = AddNewNode(GetNextNode(), l_InsertType);
-
-    return l_BuildingStack[l_Ind].Node;
+    tree_to_vine(&l_PseudoRoot, p_N);
+    vine_to_tree(&l_PseudoRoot, p_N);
+    return l_PseudoRoot.Right;
 }

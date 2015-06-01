@@ -175,7 +175,7 @@ class SPG
         /// @p_Parents : The stacked parents of the node.
         /// @p_Ind : The pointer to the top of the stacked parents.
         /// Returns the space goat node if found, the root otherwise, and its parent.
-        std::pair<link_type, link_type> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const;
+        std::tuple<link_type, link_type, std::size_t> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const;
 
         /// In-place building of a balanced tree based on a linked-list.
         /// @p_Head : The head of the linked list.
