@@ -177,30 +177,12 @@ class SPG
         /// Returns the space goat node if found, the root otherwise, and its parent.
         std::tuple<link_type, link_type, std::size_t> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const;
 
-        /// In-place building of a balanced tree based on a linked-list.
-        /// @p_Head : The head of the linked list.
-        /// @p_Size : The size of the subtree we are building.
-        /// Returns the root of the new tree.
-        link_type BuildHeightBalancedTree(link_type* p_Head, int p_Size);
-
-        /// In-place rebuilding of an unbalanced tree into a balanced tree.
-        /// @p_Size : The size of the subtree.
-        /// @p_Root : The root of the subtree.
-        /// Returns the new root of the balanced tree.
-        link_type RebuildTree(std::size_t p_Size, link_type p_Root);
-
-        /// In-place flattening of a subtree into an ordered linked-list.
-        /// @p_Root : The root of the subtree to flatten.
-        /// @p_Head : The current head of the list.
-        /// Returns a pointer to the head of the linked list.
-        link_type FlattenTree(link_type p_Root, link_type p_Head);
-
         /// Insert the given key in the tree.
         /// @p_Root : The root of the tree to insert into.
         /// @p_Key : The given key to insert.
         /// @p_Parents : The stacked parents for more process.
         /// Returns a pair containing the height of the new node and its pointer.
-        std::pair<int, link_type> InsertKey(link_type p_Root, int p_Key, link_type* p_Parents);
+        int InsertKey(link_type p_Root, value_type const& p_Key, link_type* p_Parents, link_type& p_NewNode);
 
         /// Recursively destroy the whole tree.
         /// @p_N : The root of the subtree to destroy.
@@ -220,7 +202,7 @@ class SPG
         link_type InternalFind(link_type p_Node, int p_Key);
 
     public:
-        link_type RebuildTree2(std::size_t, link_type);
+        link_type RebuildTree(std::size_t, link_type);
 
         float       m_Alpha;    ///< Alpha factor of the tree, says how much it can be unbalanced.
         SPG_Impl    m_Impl;     ///< The implementation and allocator of the ScapeGoat tree.

@@ -59,6 +59,7 @@ template <typename T,
           typename PtrAlloc>
 SPG<T, Alloc, PtrAlloc>::~SPG()
 {
+return;
     if (m_Impl.m_Root)
     {
         DestroyRec(m_Impl.m_Root);
@@ -96,7 +97,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
         m_Impl.m_Root = CreateNode(p_Key);
         m_Impl.m_Root->Left = nullptr;
         m_Impl.m_Root->Right = nullptr;
-        ++m_Size;
+        m_Size++;
         return true;
     }
 
@@ -104,9 +105,8 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 2;
     link_type* l_Parts = AllocatePointers(l_Size);
 
-    auto&& l_Result = InsertKey(m_Impl.m_Root, p_Key, l_Parts);
-    auto&& l_Height = std::get<0>(l_Result);
-    auto&& l_NewNode = std::get<1>(l_Result);
+    link_type l_NewNode = nullptr;
+    int l_Height = InsertKey(m_Impl.m_Root, p_Key, l_Parts, l_NewNode);
 
     ++m_Size;
 
@@ -120,7 +120,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
         auto l_ScapeGoatNode = std::get<0>(l_Result);
         auto l_ParentSG = std::get<1>(l_Result);
         auto l_SizeST = std::get<2>(l_Result);
-        l_ScapeGoatNode = RebuildTree2(l_SizeST, l_ScapeGoatNode);
+        l_ScapeGoatNode = RebuildTree(l_SizeST, l_ScapeGoatNode);
 
         /// We link back the new subtree to the current tree.
         if (l_ParentSG)
@@ -165,8 +165,6 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
     std::size_t l_TotalSize = 0;
     std::size_t l_Height = 0;
 
-    std::stack<std::tuple<link_type, link_type, std::size_t>> l_SGNodes;
-
     while (p_Ind >= 0)
     {
         l_Parent = p_Parents[p_Ind--];
@@ -178,18 +176,11 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
         l_Sibling = p_Node->Key <= l_Parent->Key ? l_Parent->Right : l_Parent->Left;
         l_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
         if (l_Height > HeightAlpha(l_TotalSize))
-            l_SGNodes.push(std::make_tuple(l_Parent, p_Ind < 0 ? nullptr : p_Parents[p_Ind], l_TotalSize));
-
-        /// If we get a deep enough ancestor, we stop and return.
-        if (l_SGNodes.size() == 2)
-            return l_SGNodes.top();
+            return std::make_tuple(l_Parent, p_Ind < 0 ? nullptr : p_Parents[p_Ind], l_TotalSize);
 
         p_Node = l_Parent;
         l_Size = l_TotalSize;
     }
-
-    if (!l_SGNodes.empty())
-        return l_SGNodes.top();
 
     return std::make_tuple(m_Impl.m_Root, nullptr, l_TotalSize);
 }
@@ -197,94 +188,38 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parent
 template <typename T,
           typename Alloc,
           typename PtrAlloc>
-typename SPG<T, Alloc, PtrAlloc>::link_type
-SPG<T, Alloc, PtrAlloc>::BuildHeightBalancedTree(link_type* p_Head, int p_Size)
-{
-    if (p_Size <= 0)
-        return nullptr;
-
-    /// Build left subtree.
-    link_type l_Left = BuildHeightBalancedTree(p_Head, p_Size / 2);
-
-    /// Build root from actual node.
-    link_type l_Parent = *p_Head;
-
-    /// We link parent and child.
-    l_Parent->Left = l_Left;
-
-    /// Advance the pointer to the next element.
-    *p_Head = (*p_Head)->Right;
-
-    /// Build the right subtree and link to parent.
-    l_Parent->Right = BuildHeightBalancedTree(p_Head, p_Size - p_Size / 2 - 1);
-
-    return l_Parent;
-}
-
-template <typename T,
-          typename Alloc,
-          typename PtrAlloc>
-typename SPG<T, Alloc, PtrAlloc>::link_type
-SPG<T, Alloc, PtrAlloc>::RebuildTree(std::size_t p_Size, link_type p_Root)
-{
-    link_type l_Head = FlattenTree(p_Root, nullptr);
-    return BuildHeightBalancedTree(&l_Head, p_Size);
-}
-
-template <typename T,
-          typename Alloc,
-          typename PtrAlloc>
-typename SPG<T, Alloc, PtrAlloc>::link_type
-SPG<T, Alloc, PtrAlloc>::FlattenTree(link_type p_Root, link_type p_Head)
-{
-    if (p_Root == nullptr)
-        return p_Head;
-
-    p_Root->Right = FlattenTree(p_Root->Right, p_Head);
-    link_type l_Tmp = p_Root->Left;
-    p_Root->Left = nullptr;
-    return FlattenTree(l_Tmp, p_Root);
-}
-
-template <typename T,
-          typename Alloc,
-          typename PtrAlloc>
-std::pair<int, typename SPG<T, Alloc, PtrAlloc>::link_type>
-SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, int p_Key, link_type* p_Parents)
+int
+SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, link_type* p_Parents, link_type& p_NewNode)
 {
     std::size_t l_Height = 0;
 
     while (p_Root)
     {
         /// We save the parents.
-        p_Parents[l_Height] = p_Root;
+        p_Parents[l_Height++] = p_Root;
 
         /// If the given key already exists, we return a negative height.
         if (p_Root->Key == p_Key)
-            return std::make_pair(-1, nullptr);
+            return -1;
         /// We look for a left/right place to put our new node.
-        else if (p_Key <= p_Root->Key && p_Root->Left)
+        else if (p_Key <= p_Root->Key)
             p_Root = p_Root->Left;
-        else if (p_Root->Right && p_Key > p_Root->Key)
+        else if (p_Key > p_Root->Key)
             p_Root = p_Root->Right;
-        else
-            break;
-
-        l_Height++;
     }
 
     /// Build our new node.
-    auto l_NewNode = CreateNode(p_Key);
-    l_NewNode->Left = nullptr;
-    l_NewNode->Right = nullptr;
+    p_NewNode = CreateNode(p_Key);
+    p_NewNode->Left = nullptr;
+    p_NewNode->Right = nullptr;
 
     /// We link ourself with the parent.
-    if (l_NewNode->Key <= p_Root->Key)
-        p_Root->Left = l_NewNode;
+    if (p_NewNode->Key <= p_Parents[l_Height - 1]->Key)
+        p_Parents[l_Height - 1]->Left = p_NewNode;
     else
-        p_Root->Right = l_NewNode;
+        p_Parents[l_Height - 1]->Right = p_NewNode;
 
-    return std::make_pair(l_Height + 1, l_NewNode);
+    return l_Height;
 }
 
 template <typename T,
@@ -340,7 +275,7 @@ template <typename T,
           typename Alloc,
           typename PtrAlloc>
 typename SPG<T, Alloc, PtrAlloc>::link_type
-SPG<T, Alloc, PtrAlloc>::RebuildTree2(std::size_t p_N, link_type p_SPN)
+SPG<T, Alloc, PtrAlloc>::RebuildTree(std::size_t p_N, link_type p_SPN)
 {
     // Tree to Vine algorithm:  a "pseudo-root" is passed ---
     // comparable with a dummy header for a linked list.
@@ -389,12 +324,12 @@ SPG<T, Alloc, PtrAlloc>::RebuildTree2(std::size_t p_N, link_type p_SPN)
         {  int Rtn = 1;
             while ( Rtn <= size )     // Drive one step PAST FULL
                 Rtn = Rtn + Rtn + 1;   // next pow(2,k)-1
-            return Rtn/2;
+            return Rtn >> 1;
         };
         int full_count = FullSize (size);
         compression(root, size - full_count);
-        for ( size = full_count ; size > 1 ; size /= 2 )
-            compression ( root, size / 2 );
+        for ( size = full_count ; size > 1 ; size >>= 1 )
+            compression ( root, size >> 1 );
     };
 
     node_type l_PseudoRoot{value_type(), nullptr, p_SPN};
