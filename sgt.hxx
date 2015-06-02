@@ -47,11 +47,9 @@ template <typename T,
           typename PtrAlloc>
 SPG<T, Alloc, PtrAlloc>::SPG(float p_Alpha)
     :
-        m_Alpha(p_Alpha),
+        m_Alpha(-std::log(p_Alpha)),
         m_Size(0)
 {
-    /// We assert that the alpha factor given is right.
-    assert(m_Alpha >= 0.5f && m_Alpha <= 1.0f);
 }
 
 template <typename T,
@@ -97,16 +95,16 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
         m_Impl.m_Root = CreateNode(p_Key);
         m_Impl.m_Root->Left = nullptr;
         m_Impl.m_Root->Right = nullptr;
-        m_Size++;
+        ++m_Size;
         return true;
     }
 
     /// We allocate the array of the parents. Size is the maximum height of the tree.
-    std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 2;
-    link_type* l_Parts = AllocatePointers(l_Size);
+    std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 3;
+    link_type* l_Parents = AllocatePointers(l_Size);
 
     link_type l_NewNode = nullptr;
-    int l_Height = InsertKey(m_Impl.m_Root, p_Key, l_Parts, l_NewNode);
+    int l_Height = InsertKey(m_Impl.m_Root, p_Key, l_Parents, l_NewNode);
 
     ++m_Size;
 
@@ -116,10 +114,10 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     else if (l_Height > HeightAlpha(m_Size))
     {
         /// We find the node that is making the unbalance and rebuild the sub-tree.
-        auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parts, l_Height - 1);
+        std::size_t l_SizeST = 0;
+        auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parents, l_Height - 1, l_SizeST);
         auto l_ScapeGoatNode = std::get<0>(l_Result);
         auto l_ParentSG = std::get<1>(l_Result);
-        auto l_SizeST = std::get<2>(l_Result);
         l_ScapeGoatNode = RebuildTree(l_SizeST, l_ScapeGoatNode);
 
         /// We link back the new subtree to the current tree.
@@ -135,7 +133,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     }
 
     /// Deallocate the parents stack.
-    DeallocatePointers(l_Parts, l_Size);
+    DeallocatePointers(l_Parents, l_Size);
 
     return true;
 }
@@ -153,36 +151,40 @@ SPG<T, Alloc, PtrAlloc>::PrettyPrint() const
 template <typename T,
           typename Alloc,
           typename PtrAlloc>
-std::tuple<typename SPG<T, Alloc, PtrAlloc>::link_type, typename SPG<T, Alloc, PtrAlloc>::link_type, std::size_t>
-SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const
+std::pair<typename SPG<T, Alloc, PtrAlloc>::link_type, typename SPG<T, Alloc, PtrAlloc>::link_type>
+SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(
+        link_type p_Node,
+        link_type* p_Parents,
+        std::size_t p_Ind,
+        std::size_t& p_TotalSize) const
 {
     assert(p_Node != nullptr);
 
-    link_type l_Parent = nullptr;
-    link_type l_Sibling = nullptr;
+    link_type l_Parent;
+    link_type l_Sibling;
 
     std::size_t l_Size = 1;
-    std::size_t l_TotalSize = 0;
     std::size_t l_Height = 0;
 
-    while (p_Ind >= 0)
+    /// Indice begins to one.
+    while (p_Ind >= 1)
     {
         l_Parent = p_Parents[p_Ind--];
-        l_Height++;
+        ++l_Height;
 
         assert(l_Parent);
 
         /// We only recalculate the sibling subtree size.
         l_Sibling = p_Node->Key <= l_Parent->Key ? l_Parent->Right : l_Parent->Left;
-        l_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
-        if (l_Height > HeightAlpha(l_TotalSize))
-            return std::make_tuple(l_Parent, p_Ind < 0 ? nullptr : p_Parents[p_Ind], l_TotalSize);
+        p_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
+        if (l_Height > HeightAlpha(p_TotalSize))
+            return std::make_pair(l_Parent, p_Parents[p_Ind]);
 
         p_Node = l_Parent;
-        l_Size = l_TotalSize;
+        l_Size = p_TotalSize;
     }
 
-    return std::make_tuple(m_Impl.m_Root, nullptr, l_TotalSize);
+    return std::make_pair(m_Impl.m_Root, nullptr);
 }
 
 template <typename T,
@@ -191,7 +193,9 @@ template <typename T,
 int
 SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, link_type* p_Parents, link_type& p_NewNode)
 {
-    std::size_t l_Height = 0;
+    /// We begin to one, this way we won't have to check in FindScapeGoatNode
+    /// if the indice of the parent is greater than 0.
+    std::size_t l_Height = 1;
 
     while (p_Root)
     {
@@ -219,7 +223,7 @@ SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, li
     else
         p_Parents[l_Height - 1]->Right = p_NewNode;
 
-    return l_Height;
+    return l_Height - 1; ///< We sub one because we start to one.
 }
 
 template <typename T,

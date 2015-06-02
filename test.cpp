@@ -8,7 +8,7 @@
 
 int main(void)
 {
-    std::size_t l_Size = 800000;
+    std::size_t l_Size = 8000000;
 
     std::vector<int> v;
     v.reserve(l_Size);

@@ -175,7 +175,7 @@ class SPG
         /// @p_Parents : The stacked parents of the node.
         /// @p_Ind : The pointer to the top of the stacked parents.
         /// Returns the space goat node if found, the root otherwise, and its parent.
-        std::tuple<link_type, link_type, std::size_t> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, int p_Ind) const;
+        std::pair<link_type, link_type> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, std::size_t p_Ind, std::size_t& p_TotalSize) const;
 
         /// Insert the given key in the tree.
         /// @p_Root : The root of the tree to insert into.
@@ -193,7 +193,7 @@ class SPG
         /// Returns the alpha height value.
         inline float HeightAlpha(std::size_t p_N) const
         {
-            return std::ceil(std::log(p_N) / -std::log(m_Alpha));
+            return (std::log(p_N) / m_Alpha);
         }
 
         /// Returns the node with the given key in the tree.
