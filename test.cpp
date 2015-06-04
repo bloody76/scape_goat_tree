@@ -8,7 +8,7 @@
 
 int main(void)
 {
-    std::size_t l_Size = 8000000;
+    std::size_t l_Size = 800000;
 
     std::vector<int> v;
     v.reserve(l_Size);
@@ -21,7 +21,6 @@ int main(void)
 
     std::shuffle(v.begin(), v.end(), g);
 
-
     /// SPG.
     std::clock_t l_clock1 = std::clock();
     std::set<int> s2;
@@ -33,13 +32,10 @@ int main(void)
     /// SET.
     l_clock1 = std::clock();
 
-    CALLGRIND_START_INSTRUMENTATION;
-
     SPG<int> s{0.6f};
     for (int e : v)
         s.insert(e);
 
-    CALLGRIND_STOP_INSTRUMENTATION;
     CALLGRIND_DUMP_STATS;
 
     l_clock2 = std::clock();

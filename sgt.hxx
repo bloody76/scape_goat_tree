@@ -1,14 +1,20 @@
 #pragma once
+#include <valgrind/callgrind.h>
 
 ///////////////
 /// Node part
 ///////////////
 
-template <typename T>
-std::size_t
-Node<T>::Size() const
+namespace details
 {
-    return 1 + (Left ? Left->Size() : 0) + (Right ? Right->Size() : 0);
+    template <typename T>
+    std::size_t Size(Node<T> const* p_Node)
+    {
+        if (p_Node)
+            return Size(p_Node->Left) + Size(p_Node->Right) + 1;
+
+        return 0;
+    }
 }
 
 template <typename T>
@@ -99,14 +105,14 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
         return true;
     }
 
+    CALLGRIND_START_INSTRUMENTATION;
     /// We allocate the array of the parents. Size is the maximum height of the tree.
-    std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size)) + 3;
-    link_type* l_Parents = AllocatePointers(l_Size);
+    std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size++)) + 3;
+    link_type l_Parents[l_Size];
+    l_Parents[0] = nullptr;
 
     link_type l_NewNode = nullptr;
     int l_Height = InsertKey(m_Impl.m_Root, p_Key, l_Parents, l_NewNode);
-
-    ++m_Size;
 
     if (l_Height == -1)
         return false;
@@ -114,8 +120,8 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     else if (l_Height > HeightAlpha(m_Size))
     {
         /// We find the node that is making the unbalance and rebuild the sub-tree.
-        std::size_t l_SizeST = 0;
-        auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parents, l_Height - 1, l_SizeST);
+        std::size_t l_SizeST = 1;
+        auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parents, l_Height, l_SizeST);
         auto l_ScapeGoatNode = std::get<0>(l_Result);
         auto l_ParentSG = std::get<1>(l_Result);
         l_ScapeGoatNode = RebuildTree(l_SizeST, l_ScapeGoatNode);
@@ -132,9 +138,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
             m_Impl.m_Root = l_ScapeGoatNode;
     }
 
-    /// Deallocate the parents stack.
-    DeallocatePointers(l_Parents, l_Size);
-
+   CALLGRIND_STOP_INSTRUMENTATION;
     return true;
 }
 
@@ -163,11 +167,10 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(
     link_type l_Parent;
     link_type l_Sibling;
 
-    std::size_t l_Size = 1;
     std::size_t l_Height = 0;
 
     /// Indice begins to one.
-    while (p_Ind >= 1)
+    while (l_Height <= HeightAlpha(p_TotalSize))
     {
         l_Parent = p_Parents[p_Ind--];
         ++l_Height;
@@ -176,15 +179,12 @@ SPG<T, Alloc, PtrAlloc>::FindScapeGoatNode(
 
         /// We only recalculate the sibling subtree size.
         l_Sibling = p_Node->Key <= l_Parent->Key ? l_Parent->Right : l_Parent->Left;
-        p_TotalSize = 1 + l_Size + (l_Sibling ? l_Sibling->Size() : 0);
-        if (l_Height > HeightAlpha(p_TotalSize))
-            return std::make_pair(l_Parent, p_Parents[p_Ind]);
+        p_TotalSize = 1 + p_TotalSize + details::Size<T>(l_Sibling);
 
         p_Node = l_Parent;
-        l_Size = p_TotalSize;
     }
 
-    return std::make_pair(m_Impl.m_Root, nullptr);
+    return std::make_pair(l_Parent, p_Parents[p_Ind]);
 }
 
 template <typename T,
@@ -202,14 +202,14 @@ SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, li
         /// We save the parents.
         p_Parents[l_Height++] = p_Root;
 
-        /// If the given key already exists, we return a negative height.
-        if (p_Root->Key == p_Key)
-            return -1;
         /// We look for a left/right place to put our new node.
-        else if (p_Key <= p_Root->Key)
+        if (p_Key <= p_Root->Key)
             p_Root = p_Root->Left;
         else if (p_Key > p_Root->Key)
             p_Root = p_Root->Right;
+        /// If the given key already exists, we return a negative height.
+        else
+            return -1;
     }
 
     /// Build our new node.
@@ -283,27 +283,33 @@ SPG<T, Alloc, PtrAlloc>::RebuildTree(std::size_t p_N, link_type p_SPN)
 {
     // Tree to Vine algorithm:  a "pseudo-root" is passed ---
     // comparable with a dummy header for a linked list.
-    auto tree_to_vine = [](link_type root, std::size_t& size)
+    auto tree_to_vine = [](link_type p_Root, std::size_t& p_Size)
     {
-        link_type vineTail, remainder, tempPtr;
+        link_type l_VineTail;
+        link_type l_Remainder;
+        link_type l_Tmp;
 
-        vineTail = root;
-        remainder = vineTail->Right;
-        size = 0;
-        while ( remainder != NULL )
-        {//If no leftward subtree, move rightward
-            if ( remainder->Left == NULL )
-            {  vineTail = remainder;
-                remainder = remainder->Right;
-                size++;
+        l_VineTail = p_Root;
+        l_Remainder = l_VineTail->Right;
+        p_Size = 0;
+
+        while (l_Remainder != nullptr)
+        {
+            //If no leftward subtree, move rightward
+            if (l_Remainder->Left == nullptr)
+            {
+                l_VineTail = l_Remainder;
+                l_Remainder = l_Remainder->Right;
+                p_Size++;
             }
             //else eliminate the leftward subtree by rotations
             else  // Rightward rotation
-            {  tempPtr = remainder->Left;
-                remainder->Left = tempPtr->Right;
-                tempPtr->Right = remainder;
-                remainder = tempPtr;
-                vineTail->Right = tempPtr;
+            {
+                l_Tmp = l_Remainder->Left;
+                l_Remainder->Left = l_Tmp->Right;
+                l_Tmp->Right = l_Remainder;
+                l_Remainder = l_Tmp;
+                l_VineTail->Right = l_Tmp;
             }
         }
     };

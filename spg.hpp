@@ -11,9 +11,6 @@ struct Node
         Node*   Left;
         Node*   Right;
 
-        /// Returns the size of the subtree formed by the current node.
-        std::size_t Size() const;
-
         /// "Pretty print" the current subtree.
         void PrettyPrint(std::size_t p_Depth);
 };
@@ -95,34 +92,6 @@ class SPG
             m_Impl.NodeAllocator::deallocate(p_Node, 1);
         }
 
-        /// Returns the node pointer allocator.
-        inline PtrAlloc& GetPtrAllocator()
-        {
-            return *static_cast<PtrAlloc*>(&m_Impl);
-        }
-
-        /// Returns the node pointer allocator.
-        inline PtrAlloc const& GetPtrAllocator() const
-        {
-            return *static_cast<PtrAlloc const*>(&m_Impl);
-        }
-
-        /// Allocates p_Size contiguous pointers and returns the adress
-        /// of the first node.
-        /// @p_Size : The size of the array to allocate.
-        inline link_type* AllocatePointers(std::size_t p_Size)
-        {
-            return m_Impl.PtrAlloc::allocate(p_Size);
-        }
-
-        /// Deallocates a node pointer array of size p_Size.
-        /// @p_Pointer : The adress of the first node of the array.
-        /// @p_Size : The size of the array.
-        inline void DeallocatePointers(link_type* p_Pointer, std::size_t p_Size)
-        {
-            m_Impl.PtrAlloc::deallocate(p_Pointer, p_Size);
-        }
-
         /// Creates a node, allocates and constructs the value in it.
         /// @p_Val : The value of the node.
         /// Returns the pointer of the new node.
@@ -193,7 +162,7 @@ class SPG
         /// Returns the alpha height value.
         inline float HeightAlpha(std::size_t p_N) const
         {
-            return (std::log(p_N) / m_Alpha);
+            return std::log(p_N) / m_Alpha;
         }
 
         /// Returns the node with the given key in the tree.
