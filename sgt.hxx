@@ -98,14 +98,11 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
     /// If the tree has no elements, we put the new node as root.
     if (!m_Impl.m_Root)
     {
-        m_Impl.m_Root = CreateNode(p_Key);
-        m_Impl.m_Root->Left = nullptr;
-        m_Impl.m_Root->Right = nullptr;
-        ++m_Size;
+        BuildRootNode(p_Key);
         return true;
     }
 
-    CALLGRIND_START_INSTRUMENTATION;
+    //CALLGRIND_START_INSTRUMENTATION;
     /// We allocate the array of the parents. Size is the maximum height of the tree.
     std::size_t l_Size = static_cast<std::size_t>(HeightAlpha(m_Size++)) + 3;
     link_type l_Parents[l_Size];
@@ -138,7 +135,7 @@ SPG<T, Alloc, PtrAlloc>::insert(value_type const& p_Key)
             m_Impl.m_Root = l_ScapeGoatNode;
     }
 
-   CALLGRIND_STOP_INSTRUMENTATION;
+    //CALLGRIND_STOP_INSTRUMENTATION;
     return true;
 }
 
@@ -195,12 +192,12 @@ SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, li
 {
     /// We begin to one, this way we won't have to check in FindScapeGoatNode
     /// if the indice of the parent is greater than 0.
-    std::size_t l_Height = 1;
+    std::size_t l_Depth = 1;
 
     while (p_Root)
     {
         /// We save the parents.
-        p_Parents[l_Height++] = p_Root;
+        p_Parents[l_Depth++] = p_Root;
 
         /// We look for a left/right place to put our new node.
         if (p_Key <= p_Root->Key)
@@ -212,18 +209,11 @@ SPG<T, Alloc, PtrAlloc>::InsertKey(link_type p_Root, value_type const& p_Key, li
             return -1;
     }
 
-    /// Build our new node.
-    p_NewNode = CreateNode(p_Key);
-    p_NewNode->Left = nullptr;
-    p_NewNode->Right = nullptr;
+    --l_Depth;
 
-    /// We link ourself with the parent.
-    if (p_NewNode->Key <= p_Parents[l_Height - 1]->Key)
-        p_Parents[l_Height - 1]->Left = p_NewNode;
-    else
-        p_Parents[l_Height - 1]->Right = p_NewNode;
+    p_NewNode = BuildNode(p_Key, p_Parents[l_Depth]);
 
-    return l_Height - 1; ///< We sub one because we start to one.
+    return l_Depth; ///< We sub one because we start to one.
 }
 
 template <typename T,

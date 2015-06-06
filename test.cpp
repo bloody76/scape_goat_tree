@@ -8,7 +8,7 @@
 
 int main(void)
 {
-    std::size_t l_Size = 800000;
+    std::size_t l_Size = 80000;
 
     std::vector<int> v;
     v.reserve(l_Size);
@@ -36,7 +36,7 @@ int main(void)
     for (int e : v)
         s.insert(e);
 
-    CALLGRIND_DUMP_STATS;
+    //CALLGRIND_DUMP_STATS;
 
     l_clock2 = std::clock();
     std::cout << l_clock2 - l_clock1 << std::endl;

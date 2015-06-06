@@ -170,6 +170,32 @@ class SPG
         /// @p_Key : The key we look for.
         link_type InternalFind(link_type p_Node, int p_Key);
 
+        /// Creates a node.
+        link_type BuildNode(value_type const& p_Key, link_type p_Parent)
+        {
+            /// Build our new node.
+            auto l_NewNode = CreateNode(p_Key);
+            l_NewNode->Left = nullptr;
+            l_NewNode->Right = nullptr;
+
+            /// We link ourself with the parent.
+            if (p_Key <= p_Parent->Key)
+                p_Parent->Left = l_NewNode;
+            else
+                p_Parent->Right = l_NewNode;
+
+            return l_NewNode;
+        }
+
+        /// Creates the root.
+        void BuildRootNode(value_type const& p_Key)
+        {
+            m_Impl.m_Root = CreateNode(p_Key);
+            m_Impl.m_Root->Left = nullptr;
+            m_Impl.m_Root->Right = nullptr;
+            ++m_Size;
+        }
+
     public:
         link_type RebuildTree(std::size_t, link_type);
 
