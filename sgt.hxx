@@ -128,8 +128,8 @@ SPG<T, Comp, Alloc>::insert(value_type const& p_Key)
         /// the sub-tree.
         std::size_t l_SubTreeSize = 1;
         auto&& l_Result = FindScapeGoatNode(l_NewNode, l_Parents, l_Height, l_SubTreeSize);
-        auto l_ScapeGoatNode = std::get<0>(l_Result);
-        auto l_ParentSG = std::get<1>(l_Result);
+        auto l_ScapeGoatNode = l_Result.first;
+        auto l_ParentSG = l_Result.second;
         l_ScapeGoatNode = RebuildTree(l_SubTreeSize, l_ScapeGoatNode);
 
         /// We link back the new subtree to the current tree.
