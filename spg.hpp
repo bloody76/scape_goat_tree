@@ -207,7 +207,7 @@ class SPG
             l_NewNode->Right = nullptr;
 
             /// We link ourself with the parent.
-            if (p_Key < p_Parent->Key)
+            if (m_Impl.m_KeyComparator(p_Key, p_Parent->Key))
                 p_Parent->Left = l_NewNode;
             else
                 p_Parent->Right = l_NewNode;
