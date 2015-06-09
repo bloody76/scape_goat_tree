@@ -218,7 +218,7 @@ SPG<T, Comp, Alloc>::InsertKey(link_type p_Root, value_type const& p_Key, link_t
             return -1;
     }
 
-    return ((ptrdiff_t)p_Parents - (ptrdiff_t)l_FirstParent) / sizeof (link_type) - 1;
+    return ((std::ptrdiff_t)p_Parents - (std::ptrdiff_t)l_FirstParent) / sizeof (link_type) - 1;
 }
 
 template <typename T,
