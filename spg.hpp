@@ -4,30 +4,44 @@
 #include <cassert>
 #include <stack>
 
-template <typename T>
-struct Node
+/// Basic node structure for the scapegoat tree.
+/// The advantage of this structure is that we only need
+/// the left and right children of the node.
+struct NodeBase
 {
-        T       Key;
-        Node*   Left;
-        Node*   Right;
+    NodeBase*   Left;
+    NodeBase*   Right;
 
-        /// "Pretty print" the current subtree.
-        void PrettyPrint(std::size_t p_Depth);
+    /// Print the current subtree.
+    /// @p_Depth is the number of tabs that
+    /// will be print.
+    template <typename T>
+    void Print(std::size_t p_Depth) const;
+};
+
+/// This is the templated structure that will contain the key.
+template <typename T>
+struct Node : public NodeBase
+{
+    T Key;
 };
 
 /// ScapeGoat tree implementation from the paper ScapeGoat Tree
-/// of Igal Galperin and Ronald L. Rivest. The partial insertion
-/// method is the recursive one. It flattens the subtree in order
-/// to rebuild it.
+/// of Igal Galperin and Ronald L. Rivest. The rebalancing method
+/// is the one of Day/Stout/Warren.
 template <typename T,
-          typename Alloc = std::allocator<T>,
-          typename PtrAlloc = std::allocator<Node<T>*>>
+          typename Comparator = std::less<T>,
+          typename Alloc = std::allocator<T>>
 class SPG
 {
     using NodeAllocator = typename Alloc::template rebind<Node<T>>::other;
 
+    using node_base_type = NodeBase;
+    using link_base_type = node_base_type*;
+
     using node_type = Node<T>;
     using link_type = node_type*;
+
     using allocator_type = Alloc;
     using value_type = T;
 
@@ -53,7 +67,7 @@ class SPG
         bool insert(value_type const& p_Key);
 
         /// Print the tree on the cout.
-        void PrettyPrint() const;
+        void Print() const;
 
     protected:
 
@@ -95,7 +109,7 @@ class SPG
         /// Creates a node, allocates and constructs the value in it.
         /// @p_Val : The value of the node.
         /// Returns the pointer of the new node.
-        link_type CreateNode(value_type const& p_Val)
+        inline link_type CreateNode(value_type const& p_Val)
         {
             auto l_Tmp = AllocateNode();
 
@@ -123,39 +137,50 @@ class SPG
         ////////////////////////
         ////////////////////////
 
-        /// Implementation class of the ScapeGoat tree. Corresponds to the allocator also.
-        struct SPG_Impl : public NodeAllocator, public PtrAlloc
+        /// Implementation class of the ScapeGoat tree.
+        /// Corresponds to the allocator also.
+        struct SPG_Impl : public NodeAllocator
         {
-            link_type m_Root; ///< Root of the tree.
+            link_base_type m_Root; ///< Root of the tree.
+            Comparator m_KeyComparator;
 
             SPG_Impl(NodeAllocator const& p_Allocator = NodeAllocator(),
-                    PtrAlloc const& p_PtrAllocator = PtrAlloc())
+                     Comparator const& p_Comparator = Comparator())
                 : NodeAllocator(p_Allocator),
-                PtrAlloc(p_PtrAllocator),
-                m_Root(nullptr)
+                m_Root(nullptr),
+                m_KeyComparator(p_Comparator)
             {
             }
         };
 
     private:
+        /// Returns the key of a NodeBase.
+        /// @p_NodeBase : The node.
+        inline value_type const& GetKey(link_base_type p_NodeBase) const
+        {
+            return static_cast<link_type>(p_NodeBase)->Key;
+        }
+
         /// Finds the space goat node which is the one who got a height greater than
         /// the authorized alpha height.
         /// @p_Node : The node to look from.
         /// @p_Parents : The stacked parents of the node.
         /// @p_Ind : The pointer to the top of the stacked parents.
+        /// @p_TotalSize : The size of the subtree under the scapegoat node.
         /// Returns the space goat node if found, the root otherwise, and its parent.
-        std::pair<link_type, link_type> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, std::size_t p_Ind, std::size_t& p_TotalSize) const;
+        inline std::pair<link_type, link_type> FindScapeGoatNode(link_type p_Node, link_type* p_Parents, std::size_t p_Ind, std::size_t& p_TotalSize) const;
 
         /// Insert the given key in the tree.
         /// @p_Root : The root of the tree to insert into.
         /// @p_Key : The given key to insert.
-        /// @p_Parents : The stacked parents for more process.
+        /// @p_Parents : The stacked parents for more ocess.
+        /// @p_NewNode : The new node that will be allocated and created in the method.
         /// Returns a pair containing the height of the new node and its pointer.
-        int InsertKey(link_type p_Root, value_type const& p_Key, link_type* p_Parents, link_type& p_NewNode);
+        inline int InsertKey(link_type p_Root, value_type const& p_Key, link_type* p_Parents) const;
 
         /// Recursively destroy the whole tree.
         /// @p_N : The root of the subtree to destroy.
-        void DestroyRec(link_type p_N);
+        void DestroyRec(link_base_type p_N);
 
         /// Calculate the alpha height of the tree based on the size given.
         /// @p_N : The size of the tree.
@@ -170,8 +195,11 @@ class SPG
         /// @p_Key : The key we look for.
         link_type InternalFind(link_type p_Node, int p_Key);
 
-        /// Creates a node.
-        link_type BuildNode(value_type const& p_Key, link_type p_Parent)
+        /// Creates a node and returns it.
+        /// @p_Key : The key of the new node.
+        /// @p_Parent : The parent of the new node.
+        inline link_type BuildNode(value_type const& p_Key,
+                                   link_type p_Parent)
         {
             /// Build our new node.
             auto l_NewNode = CreateNode(p_Key);
@@ -179,7 +207,7 @@ class SPG
             l_NewNode->Right = nullptr;
 
             /// We link ourself with the parent.
-            if (p_Key <= p_Parent->Key)
+            if (p_Key < p_Parent->Key)
                 p_Parent->Left = l_NewNode;
             else
                 p_Parent->Right = l_NewNode;
@@ -188,6 +216,7 @@ class SPG
         }
 
         /// Creates the root.
+        /// @p_Key : The key of the root.
         void BuildRootNode(value_type const& p_Key)
         {
             m_Impl.m_Root = CreateNode(p_Key);
@@ -197,7 +226,7 @@ class SPG
         }
 
     public:
-        link_type RebuildTree(std::size_t, link_type);
+        link_type RebuildTree(std::size_t, link_base_type);
 
         float       m_Alpha;    ///< Alpha factor of the tree, says how much it can be unbalanced.
         SPG_Impl    m_Impl;     ///< The implementation and allocator of the ScapeGoat tree.

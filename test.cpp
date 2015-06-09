@@ -8,7 +8,7 @@
 
 int main(void)
 {
-    std::size_t l_Size = 80000;
+    std::size_t l_Size = 1000000;
 
     std::vector<int> v;
     v.reserve(l_Size);
@@ -21,25 +21,30 @@ int main(void)
 
     std::shuffle(v.begin(), v.end(), g);
 
+    auto l_clock1 = std::clock();
+
     /// SPG.
-    std::clock_t l_clock1 = std::clock();
-    std::set<int> s2;
-    for (int e : v)
-        s2.insert(e);
-    std::clock_t l_clock2 = std::clock();
-    std::cout << l_clock2 - l_clock1 << std::endl;
-
-    /// SET.
-    l_clock1 = std::clock();
-
-    SPG<int> s{0.6f};
+    SPG<int> s{0.59f};
     for (int e : v)
         s.insert(e);
 
-    //CALLGRIND_DUMP_STATS;
+    auto l_clock2 = std::clock();
+    std::cout << l_clock2 - l_clock1 << std::endl;
+
+    l_clock1 = std::clock();
+
+    /// SET.
+    std::set<int> s2;
+    for (int e : v)
+        s2.insert(e);
 
     l_clock2 = std::clock();
+
+    /// CALLGRIND_DUMP_STATS;
+
     std::cout << l_clock2 - l_clock1 << std::endl;
+
+    s2.clear();
 
     return 0;
 }
