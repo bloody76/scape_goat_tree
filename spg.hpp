@@ -12,11 +12,11 @@ struct NodeBase
     NodeBase*   Left;
     NodeBase*   Right;
 
-    /// Print the current subtree.
+    /// print the current subtree.
     /// @p_Depth is the number of tabs that
     /// will be print.
     template <typename T>
-    void Print(std::size_t p_Depth) const;
+    void print(std::size_t p_Depth) const;
 };
 
 /// This is the templated structure that will contain the key.
@@ -24,6 +24,546 @@ template <typename T>
 struct Node : public NodeBase
 {
     T Key;
+};
+
+template <typename T>
+class spg_reverse_iterator
+{
+    public:
+        using self_type = spg_reverse_iterator<T>;
+        using value_type = T;
+        using iterator = spg_reverse_iterator<T>;
+        using reference = value_type&;
+        using pointer = value_type&;
+        using link_type = Node<value_type>*;
+
+        link_type m_Node;
+        std::stack<link_type> m_Parents;
+
+        spg_reverse_iterator()
+            : m_Node(nullptr),
+            m_Parents()
+        {
+
+        }
+
+        spg_reverse_iterator(link_type p_Node)
+            : m_Node(p_Node),
+            m_Parents()
+        {
+            if (m_Node)
+                go_right();
+        }
+
+        spg_reverse_iterator(self_type const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        reference operator*() const
+        {
+            return m_Node->Key;
+        }
+
+        pointer operator->() const
+        {
+            return &(operator*());
+        }
+
+        self_type& operator++()
+        {
+            incr();
+            return *this;
+        }
+
+        self_type operator++(int)
+        {
+            auto l_Tmp = *this;
+            incr();
+            return l_Tmp;
+        }
+
+        self_type& operator--()
+        {
+            decr();
+            return *this;
+        }
+
+        self_type operator--(int)
+        {
+            self_type l_Tmp = *this;
+            decr();
+            return l_Tmp;
+        }
+
+        bool operator==(self_type const& p_Rhs) const
+        {
+            return m_Node == p_Rhs.m_Node;
+        }
+
+        bool operator!=(self_type const& p_Rhs) const
+        {
+            return !(operator==(p_Rhs));
+        }
+
+    private:
+
+        void incr()
+        {
+            if (!m_Node)
+            {
+                m_Node = nullptr;
+                return;
+            }
+
+            m_Parents.pop();
+
+            if (m_Node->Left)
+            {
+                m_Node = (link_type)m_Node->Left;
+                go_right();
+            }
+            else if (!m_Parents.empty())
+                m_Node = m_Parents.top();
+            else
+                m_Node = nullptr;
+        }
+
+        // Iterates on the right side of the tree as much as possible.
+        void go_right()
+        {
+            while (m_Node->Right)
+            {
+                m_Parents.push(m_Node);
+                m_Node = (link_type)m_Node->Right;
+            }
+
+            m_Parents.push(m_Node);
+        }
+
+        void decr()
+        {
+            if (!m_Node)
+                return;
+
+            if (m_Node->Right)
+                m_Parents.push(m_Node->Right);
+            m_Node = (link_type)m_Node->Right;
+        }
+};
+
+template <typename T>
+class spg_const_reverse_iterator
+{
+    public:
+        using self_type = spg_const_reverse_iterator<T>;
+        using value_type = T;
+        using iterator = spg_reverse_iterator<T>;
+        using const_iterator = spg_const_reverse_iterator<T>;
+        using reference = value_type const&;
+        using pointer = value_type const*;
+        using link_type = Node<value_type> const*;
+
+        link_type m_Node;
+        std::stack<link_type> m_Parents;
+
+        spg_const_reverse_iterator()
+            : m_Node(nullptr),
+            m_Parents()
+        {
+
+        }
+
+        spg_const_reverse_iterator(link_type p_Node)
+            : m_Node(p_Node),
+            m_Parents()
+        {
+            if (m_Node)
+                go_right();
+        }
+
+        spg_const_reverse_iterator(self_type const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        spg_const_reverse_iterator(iterator const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        reference operator*() const
+        {
+            return m_Node->Key;
+        }
+
+        pointer operator->() const
+        {
+            return &(operator*());
+        }
+
+        self_type& operator++()
+        {
+            incr();
+            return *this;
+        }
+
+        self_type operator++(int)
+        {
+            auto l_Tmp = *this;
+            incr();
+            return l_Tmp;
+        }
+
+        self_type& operator--()
+        {
+            decr();
+            return *this;
+        }
+
+        self_type operator--(int)
+        {
+            self_type l_Tmp = *this;
+            decr();
+            return l_Tmp;
+        }
+
+        bool operator==(self_type const& p_Rhs) const
+        {
+            return m_Node == p_Rhs.m_Node;
+        }
+
+        bool operator!=(self_type const& p_Rhs) const
+        {
+            return !(operator==(p_Rhs));
+        }
+
+    private:
+
+        void incr()
+        {
+            if (!m_Node)
+            {
+                m_Node = nullptr;
+                return;
+            }
+
+            m_Parents.pop();
+
+            if (m_Node->Left)
+            {
+                m_Node = (link_type)m_Node->Left;
+                go_right();
+            }
+            else if (!m_Parents.empty())
+                m_Node = m_Parents.top();
+            else
+                m_Node = nullptr;
+        }
+
+        // Iterates on the right side of the tree as much as possible.
+        void go_right()
+        {
+            while (m_Node->Right)
+            {
+                m_Parents.push(m_Node);
+                m_Node = (link_type)m_Node->Right;
+            }
+
+            m_Parents.push(m_Node);
+        }
+
+        void decr()
+        {
+            if (!m_Node)
+                return;
+
+            if (m_Node->Right)
+                m_Parents.push(m_Node->Right);
+            m_Node = (link_type)m_Node->Right;
+        }
+};
+
+template <typename T>
+class spg_iterator
+{
+    public:
+        using self_type = spg_iterator<T>;
+        using value_type = T;
+        using iterator = spg_iterator<T>;
+        using reference = value_type&;
+        using pointer = value_type&;
+        using link_type = Node<value_type>*;
+
+        link_type m_Node;
+        std::stack<link_type> m_Parents;
+
+        spg_iterator()
+            : m_Node(nullptr),
+            m_Parents()
+        {
+
+        }
+
+        spg_iterator(link_type p_Node)
+            : m_Node(p_Node),
+            m_Parents()
+        {
+            if (m_Node)
+                go_left();
+        }
+
+        spg_iterator(self_type const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        reference operator*() const
+        {
+            return m_Node->Key;
+        }
+
+        pointer operator->() const
+        {
+            return &(operator*());
+        }
+
+        self_type& operator++()
+        {
+            incr();
+            return *this;
+        }
+
+        self_type operator++(int)
+        {
+            auto l_Tmp = *this;
+            incr();
+            return l_Tmp;
+        }
+
+        self_type& operator--()
+        {
+            decr();
+            return *this;
+        }
+
+        self_type operator--(int)
+        {
+            self_type l_Tmp = *this;
+            decr();
+            return l_Tmp;
+        }
+
+        bool operator==(self_type const& p_Rhs) const
+        {
+            return m_Node == p_Rhs.m_Node;
+        }
+
+        bool operator!=(self_type const& p_Rhs) const
+        {
+            return !(operator==(p_Rhs));
+        }
+
+    private:
+
+        void incr()
+        {
+            if (!m_Node)
+            {
+                m_Node = nullptr;
+                return;
+            }
+
+            m_Parents.pop();
+
+            if (m_Node->Right)
+            {
+                m_Node = (link_type)m_Node->Right;
+                go_left();
+            }
+            else if (!m_Parents.empty())
+                m_Node = m_Parents.top();
+            else
+                m_Node = nullptr;
+        }
+
+        // Iterates on the left side of the tree as much as possible.
+        void go_left()
+        {
+            while (m_Node->Left)
+            {
+                m_Parents.push(m_Node);
+                m_Node = (link_type)m_Node->Left;
+            }
+
+            m_Parents.push(m_Node);
+        }
+
+        void decr()
+        {
+            if (!m_Node)
+                return;
+
+            if (m_Node->Left)
+                m_Parents.push(m_Node->Left);
+            m_Node = (link_type)m_Node->Left;
+        }
+};
+
+template <typename T>
+class spg_const_iterator
+{
+    public:
+        using self_type = spg_const_iterator<T>;
+        using value_type = T;
+        using iterator = spg_iterator<T>;
+        using const_iterator = spg_const_iterator<T>;
+        using reference = value_type const&;
+        using pointer = value_type const&;
+        using link_type = Node<value_type> const*;
+
+        link_type m_Node;
+        std::stack<link_type> m_Parents;
+
+        spg_const_iterator()
+            : m_Node(nullptr),
+            m_Parents()
+        {
+
+        }
+
+        spg_const_iterator(link_type p_Node)
+            : m_Node(p_Node),
+            m_Parents()
+        {
+            if (m_Node)
+                go_left();
+        }
+
+        spg_const_iterator(self_type const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        spg_const_iterator(iterator const& p_Itr)
+        {
+            if (this != &p_Itr)
+            {
+                m_Node = p_Itr.m_Node;
+                m_Parents = p_Itr.m_Parents;
+            }
+        }
+
+        reference operator*() const
+        {
+            return m_Node->Key;
+        }
+
+        pointer operator->() const
+        {
+            return &(operator*());
+        }
+
+        self_type& operator++()
+        {
+            incr();
+            return *this;
+        }
+
+        self_type operator++(int)
+        {
+            auto l_Tmp = *this;
+            incr();
+            return l_Tmp;
+        }
+
+        self_type& operator--()
+        {
+            decr();
+            return *this;
+        }
+
+        self_type operator--(int)
+        {
+            self_type l_Tmp = *this;
+            decr();
+            return l_Tmp;
+        }
+
+        bool operator==(self_type const& p_Rhs) const
+        {
+            return m_Node == p_Rhs.m_Node;
+        }
+
+        bool operator!=(self_type const& p_Rhs) const
+        {
+            return !(operator==(p_Rhs));
+        }
+
+    private:
+
+        void incr()
+        {
+            if (!m_Node)
+            {
+                m_Node = nullptr;
+                return;
+            }
+
+            m_Parents.pop();
+
+            if (m_Node->Right)
+            {
+                m_Node = (link_type)m_Node->Right;
+                go_left();
+            }
+            else if (!m_Parents.empty())
+                m_Node = m_Parents.top();
+            else
+                m_Node = nullptr;
+        }
+
+        // Iterates on the left side of the tree as much as possible.
+        void go_left()
+        {
+            while (m_Node->Left)
+            {
+                m_Parents.push(m_Node);
+                m_Node = (link_type)m_Node->Left;
+            }
+
+            m_Parents.push(m_Node);
+        }
+
+        void decr()
+        {
+            if (!m_Node)
+                return;
+
+            if (m_Node->Left)
+                m_Parents.push(m_Node->Left);
+            m_Node = (link_type)m_Node->Left;
+        }
 };
 
 /// ScapeGoat tree implementation from the paper ScapeGoat Tree
@@ -45,6 +585,11 @@ class SPG
     using allocator_type = Alloc;
     using value_type = T;
 
+    using iterator = spg_iterator<T>;
+    using const_iterator = spg_const_iterator<T>;
+    using reverse_iterator = spg_reverse_iterator<T>;
+    using const_reverse_iterator = spg_const_reverse_iterator<T>;
+
     public:
         /// Constructs a space goat tree.
         /// @p_Alpha : unbalance factor of the tree, MUST be in the interval [0.5, 1.0].
@@ -54,7 +599,10 @@ class SPG
         ~SPG();
 
         /// Returns the size of the tree.
-        std::size_t Size() const;
+        std::size_t size() const { return m_Size; };
+
+        /// Returns true if the tree is empty.
+        bool empty() const { return size() == 0; }
 
         /// Returns the node with the given key in the tree.
         /// @p_Key : The key we look for.
@@ -66,8 +614,57 @@ class SPG
         /// Returns true if the key was inserted, false otherwise.
         bool insert(value_type const& p_Key);
 
-        /// Print the tree on the cout.
-        void Print() const;
+        /// Erases the elements which value is p_Key.
+        /// @p_Key : The key to erase.
+        /// Returns the number of elements erased.
+        std::size_t erase(value_type const& p_Key);
+
+        /// print the tree on the cout.
+        void print() const;
+
+        ////////////////////////
+        ///     Iterators.
+        ////////////////////////
+
+        iterator begin()
+        {
+            return iterator((link_type)m_Impl.m_Root);
+        }
+
+        reverse_iterator rbegin()
+        {
+            return reverse_iterator((link_type)m_Impl.m_Root);
+        }
+
+        const_iterator cbegin() const
+        {
+            return const_iterator((link_type)m_Impl.m_Root);
+        }
+
+        const_reverse_iterator crbegin() const
+        {
+            return const_reverse_iterator((link_type)m_Impl.m_Root);
+        }
+
+        iterator end()
+        {
+            return iterator(nullptr);
+        }
+
+        reverse_iterator rend()
+        {
+            return reverse_iterator(nullptr);
+        }
+
+        const_iterator cend() const
+        {
+            return const_iterator(nullptr);
+        }
+
+        const_reverse_iterator crend() const
+        {
+            return const_reverse_iterator(nullptr);
+        }
 
     protected:
 

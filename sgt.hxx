@@ -1,5 +1,4 @@
 #pragma once
-#include <valgrind/callgrind.h>
 
 ///////////////
 /// Node part
@@ -19,7 +18,7 @@ namespace details
 
 template <typename T>
 void
-NodeBase::Print(std::size_t p_Depth) const
+NodeBase::print(std::size_t p_Depth) const
 {
     for (int i = 0; i < p_Depth; i++)
         std::cout << "\t";
@@ -28,7 +27,7 @@ NodeBase::Print(std::size_t p_Depth) const
     if (Left != nullptr)
     {
         std::cout << std::endl;
-        Left->Print<T>(p_Depth + 1);
+        Left->print<T>(p_Depth + 1);
     }
     else
         std::cout << "{}";
@@ -37,7 +36,7 @@ NodeBase::Print(std::size_t p_Depth) const
     if (Right != nullptr)
     {
         std::cout << std::endl;
-        Right->Print<T>(p_Depth + 1);
+        Right->print<T>(p_Depth + 1);
     }
     else
         std::cout << "{}";
@@ -69,15 +68,6 @@ SPG<T, Comp, Alloc>::~SPG()
         DestroyRec(m_Impl.m_Root);
         DestroyNode(static_cast<link_type>(m_Impl.m_Root));
     }
-}
-
-template <typename T,
-          typename Comp,
-          typename Alloc>
-std::size_t
-SPG<T, Comp, Alloc>::Size() const
-{
-    return m_Size;
 }
 
 template <typename T,
@@ -151,10 +141,22 @@ SPG<T, Comp, Alloc>::insert(value_type const& p_Key)
 template <typename T,
           typename Comp,
           typename Alloc>
-void
-SPG<T, Comp, Alloc>::Print() const
+std::size_t
+SPG<T, Comp, Alloc>::erase(value_type const& p_Key)
 {
-    m_Impl.m_Root->template Print<T>(0);
+    if (!m_Impl.m_Root)
+        return 0;
+
+    auto l_Link = find(p_Key);
+}
+
+template <typename T,
+          typename Comp,
+          typename Alloc>
+void
+SPG<T, Comp, Alloc>::print() const
+{
+    m_Impl.m_Root->template print<T>(0);
     std::cout << std::endl;
 }
 
